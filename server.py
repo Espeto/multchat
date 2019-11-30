@@ -6,6 +6,12 @@ HEADER_LENGTH = 10
 bind_port = 9999
 bind_ip =  "127.0.0.1"
 
+LIST_USERS = "list"
+NEW_NICK   = "nick"
+MESSAGE    = "msg"
+FILE       = "file"
+QUIT       = "quit"
+
 server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 #Permite a reconexão
 server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -16,7 +22,7 @@ server_socket.listen()
 
 sockets_list = [server_socket]
 
-clients = {}
+clients_dict = {}
 
 print("[*] Listening on %s:%d" % (bind_ip,bind_port))
 
@@ -54,9 +60,30 @@ def main():
 
         client,addr = server_socket.accept()
 
-        print("[*] Accepted connection from: %s:%d" % (addr[0],addr[1]))
+        try:
 
-        client_handler = threading.Thread(target=handle_client, args=(client,))
-        client_handler.start()
+            message_header = client.recv(HEADER_LENGTH)
+
+            if not len(message_header):
+                error_message = "Apelido obrigatório".encode('utf-8')
+                error_header = f"{len(error_message):<{HEADER_LENGTH}}"
+                client.send(error_header+error_message)
+
+                continue
+
+            nick_length = int(message_header.decode('utf-8').strip())
+            user_nick = client.recv(nick_length)
+            user_nick = user_nick.decode('utf-8')
+
+            clients_dict[user_nick] = client
+            sockets_list.append(client)
+
+            print("[*] Accepted connection from: %s:%d" % (addr[0],addr[1]))
+
+            client_handler = threading.Thread(target=handle_client, args=(client,))
+            client_handler.start()
+
+        except:
+            continue
 
 main()
