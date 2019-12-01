@@ -2,6 +2,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+import errno
 
 FILES_PATH =  str(Path.home())+"/chatRoom/temp"
 
@@ -48,9 +49,8 @@ def main():
     try:
         subprocess.call(["mkdir", FILES_PATH])
 
-    except subprocess.SubprocessError:
-        print("Erro ao criar diretório")
-        print("Isso pode comprometer o recebimento de arquivo")
+    except subprocess.SubprocessError as e:
+        print("Erro: {}".format(str(e)))
 
 
     while True:
@@ -129,7 +129,7 @@ def main():
                     #envia o header com o tamanho do arquivo seguido do nome do arquivo
                     client_socket.send(message_header)
 
-                    response = client_socket.recv(HEADER_LENGTH).decode('utf-8')
+                    response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
                     #Se recebeu ACK
                     #Prepara para enviar o tamanho do arquivo
@@ -142,6 +142,8 @@ def main():
                         message_header = f"{fileSize:<{HEADER_LENGTH}}".encode('utf-8')
 
                         client_socket.send(message_header)
+
+                        response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
                         #Se recebeu ACK o servidor está pronto para receber o arquivo
                         if response == RECEIVED:
@@ -179,7 +181,7 @@ def main():
                 client_socket.send(final_message)
 
         try:
-
+            #loop em mensagem recebidas
             while True:
 
                 recv_usr_header = client_socket.recv(HEADER_LENGTH)
@@ -191,6 +193,20 @@ def main():
                 recv_usr_length = int(recv_usr_header.decode('utf-8').strip())
 
                 recv_username = client_socket.recv(recv_usr_length).decode('utf-8')
-            
+
+                #aqui dentro tem que fazer o handle das mensagens enviadas
+                #pelos outros usuários
+
+        except IOError as e:
+
+            if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                print("Erro de leitura: {}".format(str(e)))
+                sys.exit()
+
+            continue
                 
+        except Exception as e:
+
+            print("Erro de leitura: {}".format(str(e)))
+            sys.exit()
 
