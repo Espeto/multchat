@@ -43,7 +43,7 @@ def handle_client(client_socket):
                 #Cliente desconectou
                 del clients_dict[client_socket]
                 sockets_list.remove(client_socket)
-                client.close()
+                client_socket.close()
 
                 break
 
