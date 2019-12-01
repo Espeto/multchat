@@ -6,6 +6,11 @@ HEADER_LENGTH = 10
 bind_port = 9999
 bind_ip =  "127.0.0.1"
 
+CONN_ACCEP   = "ACC"
+NICK_EXIST   = "NE"
+NICK_CHANGED = "NC"
+RECEIVED     = "ACK"
+
 LIST_USERS = "list"
 NEW_NICK   = "nick"
 MESSAGE    = "msg"
