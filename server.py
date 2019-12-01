@@ -50,6 +50,7 @@ def handle_client(client_socket):
             message_parse = message_header_rcv.split()
             command = message_parse[0]
 
+            #Pedido pra listar usuários conectados
             if command == LIST_USERS:
                 users_names = ""
 
@@ -62,6 +63,7 @@ def handle_client(client_socket):
 
                 client_socket.send(message_header + users_names)
 
+            #Pedido de troca de nick
             elif command == NEW_NICK:
 
                 nick_length = int(message_parse[1])
@@ -70,7 +72,7 @@ def handle_client(client_socket):
                     new_nick_try = client_socket.recv(nick_length).decode('utf-8')
                     can_change = True
 
-                    for client in clients_dict:
+                    for client in sockets_list:
                         if client != client_socket:
                             if clients_dict[client]['nick'] == new_nick_try:
                                 can_change = False
@@ -91,9 +93,26 @@ def handle_client(client_socket):
                     client_socket.close()
                     break
 
+            #envio de mensagem
             elif command == MESSAGE:
 
                 message_size = int(message_parse[1])
+
+                message = client_socket.recv(message_size)
+
+                client_nick_size = clients_dict[client_socket]['header']
+                client_nick = clients_dict[client_socket]['header']
+                
+                parcial_header = f"{MESSAGE} {client_nick_size} {message_size}"
+
+                message_header = f"{parcial_header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                message_to_send = message_header + client_nick.encode('utf-8') + message.encode('utf-8')
+
+                for socket in sockets_list:
+                    if socket != client_socket:
+
+                        socket.send(message_to_send)
 
         except:
             #ocorreu alguma desconexão
@@ -119,7 +138,7 @@ def main():
             nick_length = int(rcv_message_header.decode('utf-8').strip())
             user_nick = client_socket.recv(nick_length).decode('utf-8')
 
-            if len(clients_dict):
+            if len(sockets_list):
                 nick_existent = False
 
                 for client in clients_dict:
