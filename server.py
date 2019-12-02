@@ -39,10 +39,6 @@ def handle_client(client_socket):
 
             message_header_rcv = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
-            if not len(message_header_rcv):
-                print("Problema na conexão")
-                break
-
             message_parse = message_header_rcv.split()
             command = message_parse[0]
 
@@ -134,9 +130,22 @@ def handle_client(client_socket):
                 file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
 
                 if not file_size:
+                    print("PROBLEMA COM A COMUNICAÇÃO")
                     break
 
+                server_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+
+                #envia um ack confirmando reccebimento do tamanho do arquivo
+                client_socket.send(server_response)
+
+                #Recebe os dados do arquivo
                 file_data = client_socket.recv(file_size)
+
+                if not len(file_data):
+                    print("Problema na conexão")
+                    break
+
+                #prepara para fazer o broadcast do arquivo
 
                 message_header = f"{FILE} {clients_dict[client_socket]['header']}"
                 message_header = f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
@@ -147,21 +156,34 @@ def handle_client(client_socket):
 
                         socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
+                        #Cliente recebeu mensagem com nick do emissor
                         if socket_response == RECEIVED:
 
-                            server_response = f"{file_size:<{HEADER_LENGTH}}".encode('utf-8')
+                            server_response = f"{file_name_size:<{HEADER_LENGTH}}".encode('utf-8')
 
-                            socket.send(server_response)
+                            #Enviando o header com tamanho do nome do arquivo mais o nome
+                            socket.send(server_response + file_name.encode('utf-8'))
 
                             socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
+                            #Aguarda o ack confirmando o recebimento
                             if socket_response == RECEIVED:
 
-                                socket.send(file_data)
+                                server_response = f"{file_size:<{HEADER_LENGTH}}".encode('utf-8')
 
-                            else:
-                                print("PROBLEMA NA COMUNICAÇÃO")
-                                break
+                                #Envia o header com o tamanho do arquivo
+                                socket.send(server_response)
+                                
+                                #Aguarda o Ack de recebimento
+                                socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
+
+                                if socket_response == RECEIVED:
+                                    #Envia os dados do arquivo
+                                    socket.send(file_data)
+
+                                else:
+                                    print("PROBLEMA NA COMUNICAÇÃO")
+                                    break
 
                         else:
                             print("PROBLEMA NA COMUNICAÇÃO")
