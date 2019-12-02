@@ -1,9 +1,10 @@
 import socket
 import threading
 import select
+import os
 
 HEADER_LENGTH = 10
-bind_port = 9999
+bind_port = 1234
 bind_ip =  "127.0.0.1"
 
 CONN_ACCEP   = "ACC"
@@ -23,7 +24,7 @@ server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 server_socket.bind((bind_ip, bind_port))
 
-server_socket.listen()
+server_socket.listen(10)
 
 sockets_mutex = threading.Lock()
 sockets_list = []
@@ -32,6 +33,8 @@ clients_dict = {}
 print("[*] Listening on %s:%d" % (bind_ip,bind_port))
 
 def handle_client(client_socket):
+
+    print("THREAD DE USUÁRIO CRIADA")
     
     while True:
 
@@ -212,14 +215,19 @@ def main():
     #Só vai emitir a thread de cliente se a conexão for bem sucedida
     while True:
 
-        client_socket,addr = server_socket.accept()
-
         try:
+
+            print("Aguardando conexões...")
+            client_socket,addr = server_socket.accept()
+
+            print("[*] Tentativa de conexão de: %s:%d" % (addr[0],addr[1]))
 
             rcv_message_header = client_socket.recv(HEADER_LENGTH)
 
-            if not len(message_header):
+            if not len(rcv_message_header):
                 #continua no loop aguardando conexões
+                print("RCV_MSG_HEADER VAZIO")
+                client_socket.close()
                 continue
 
             
@@ -237,7 +245,7 @@ def main():
                             break
 
                     if nick_existent:
-                        snd_message_header = f"{NICK_EXIST:<{HEADER_LENGTH}}"
+                        snd_message_header = f"{NICK_EXIST:<{HEADER_LENGTH}}".encode('utf-8')
 
                         client_socket.send(snd_message_header)
 
@@ -250,7 +258,7 @@ def main():
             clients_dict[client_socket] = {'header': nick_length, 'nick': user_nick}
             sockets_list.append(client_socket)
 
-            snd_message_header = f"{CONN_ACCEP:<{HEADER_LENGTH}}"
+            snd_message_header = f"{CONN_ACCEP:<{HEADER_LENGTH}}".encode('utf-8')
 
             client_socket.send(snd_message_header)
 
@@ -259,7 +267,12 @@ def main():
             client_handler = threading.Thread(target=handle_client, args=(client_socket,))
             client_handler.start()
 
-        except:
+        except Exception as e:
+            print("Exception Message: {}".format(str(e)))
+            print("\n")
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+            print(exc_type, fname, exc_tb.tb_lineno)
             continue
 
 
