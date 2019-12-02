@@ -4,6 +4,7 @@ import sys, os
 from pathlib import Path
 import errno
 import time
+import threading
 
 FILES_PATH =  str(Path.home())+"/chatRoom/"
 
@@ -208,15 +209,15 @@ def main():
                 final_message = message_header + message
                 client_socket.send(final_message)
 
-        try:
+        while True:
+        
             #loop em mensagem recebidas
-            while True:
+            try:
 
                 recv_usr_header = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
                 if not len(recv_usr_header):
-                    print("Servidor fechou a conexão")
-                    sys.exit()
+                    break
 
                 parsed_header = recv_usr_header.split()
                 server_message = parsed_header[0]
@@ -299,18 +300,18 @@ def main():
 
                     print("{} enviou o arquivo {}".format(nick_sender, complete_file_path))
 
-        except IOError as e:
+            except IOError as e:
 
-            if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-                print("Erro de leitura: {}".format(str(e)))
-                sys.exit()
+                if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                    print("Erro de leitura 1: {}".format(str(e)))
+                    sys.exit()
 
-            continue
+                continue
                 
-        except Exception as e:
+            except Exception as e:
 
-            print("Erro de leitura: {}".format(str(e)))
-            sys.exit()
+                print("Erro de leitura 2: {}".format(str(e)))
+                sys.exit()
 
 
 main()
