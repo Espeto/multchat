@@ -1,13 +1,14 @@
 import socket
 import subprocess
-import sys
+import sys, os
 from pathlib import Path
 import errno
+import time
 
-FILES_PATH =  str(Path.home())+"/chatRoom/temp"
+FILES_PATH =  str(Path.home())+"/chatRoom/"
 
 HEADER_LENGTH = 10
-bind_port = 9999
+bind_port = 1234
 bind_ip = "127.0.0.1"
 
 CONN_ACCEP   = "ACC"
@@ -40,18 +41,14 @@ my_username = ""
 
 def main():
     subprocess.call("reset")
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    client_socket((bind_ip, bind_port))
-    client_socket.setblocking(False)
-
-    print("Criando diretório para receber arquivos")
+    print("Criando diretório para receber arquivos\n")
 
     try:
         subprocess.call(["mkdir", FILES_PATH])
 
     except subprocess.SubprocessError as e:
-        print("Erro: {}".format(str(e)))
+        print("Erro: {}\n".format(str(e)))
 
     print("\n")
 
@@ -61,25 +58,38 @@ def main():
 
         if len(my_username):
 
-            print("Requisitando conexão...")
+            try:
 
-            username = my_username.encode('utf-8')
-            username_header = f"{len(username):<{HEADER_LENGTH}}".encode('utf-8')
-            client_socket.send(username_header + username)
+                print("Requisitando conexão...")
+                client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                client_socket.connect((bind_ip, bind_port))
 
-            response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
+                username = str(my_username).encode('utf-8')
+                username_header = f"{len(username):<{HEADER_LENGTH}}".encode('utf-8')
+                client_socket.send(username_header + username)
 
-            if response == CONN_ACCEP:
-                print("CONEXÃO ESTABELECIDA")
-                print("BEM VIND@")
-                break
+                response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
-            elif response == NICK_EXIST:
-                print("Nick em uso")
+                if response == CONN_ACCEP:
+                    print("CONEXÃO ESTABELECIDA")
+                    print("BEM VIND@")
+                    break
 
-            else:
-                print("BUG: ", response)
-                exit()
+                elif response == NICK_EXIST:
+                    print("Nick em uso")
+                    client_socket.close()
+
+                else:
+                    print("BUG: ", response)
+                    client_socket.close()
+
+            except Exception as e:
+                print("Mensagem de erro: {}".format(str(e)))
+                print("\n")
+                exc_type, exc_obj, exc_tb = sys.exc_info()
+                fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+                print(exc_type, fname, exc_tb.tb_lineno)
+                client_socket.close()
 
         else:
             print("Nick inválido")
