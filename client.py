@@ -302,3 +302,5 @@ def main():
             print("Erro de leitura: {}".format(str(e)))
             sys.exit()
 
+
+main()
