@@ -1,7 +1,9 @@
+# -*- conding: utf-8 -*-
+
 import socket
 import threading
 import select
-import os
+import os, sys
 
 HEADER_LENGTH = 10
 bind_port = 1234
@@ -33,6 +35,8 @@ clients_dict = {}
 print("[*] Listening on %s:%d" % (bind_ip,bind_port))
 
 def handle_client(client_socket):
+    global sockets_list
+    global clients_dict
 
     print("THREAD DE USUÁRIO CRIADA")
     
@@ -42,32 +46,40 @@ def handle_client(client_socket):
 
             message_header_rcv = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
+            print("Mensagem recebida = ", message_header_rcv)
+
             message_parse = message_header_rcv.split()
             command = message_parse[0]
 
             #Pedido pra listar usuários conectados
             if command == LIST_USERS:
+                print("Pedido: Listar usuário")
                 users_names = ""
 
                 for client in clients_dict:
+                    print(clients_dict[client]['header'])
+                    print(clients_dict[client]['nick'])
                     if client != client_socket:
-                        nick_string = clients_dict[client][nick] + "\n"
+                        nick_string = clients_dict[client]['nick'] + "\n"
                         users_names += nick_string
 
-                message_header = f"{len(users_names):<HEADER_LENGTH}".encode('utf-8')
+                print(users_names)
 
-                client_socket.send(message_header + users_names)
+                message_header = f"{LIST_USERS} {len(users_names)}"
+                message_header = f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                print(message_header)
+
+                client_socket.send(message_header + users_names.encode('utf-8'))
 
             #Pedido de troca de nick
             elif command == NEW_NICK:
-
+                print("Pedido: Troca de nick")
                 nick_length = int(message_parse[1])
        
                 new_nick_try = client_socket.recv(nick_length).decode('utf-8')
 
-                if not len(new_nick_try):
-                    print("Prolema na conexão")
-                    break
+                print("Novo nick: ", new_nick_try)
 
                 can_change = True
 
@@ -77,34 +89,48 @@ def handle_client(client_socket):
                             can_change = False
                             break
 
-                message_header = ""
+                message_header = f"{NEW_NICK}"
 
                 if can_change:
-                    message_header = f"{NICK_CHANGED:<{HEADER_LENGTH}}".encode('utf-8')
-                
-                else:
-                    message_header =f"{NICK_EXIST:<{HEADER_LENGTH}}".encode('utf-8')
+                    clients_dict[client_socket]['header'] = len(new_nick_try)
+                    clients_dict[client_socket]['nick'] = new_nick_try
 
-                client_socket.send(message_header)
+                    message_header = f"{message_header} {NICK_CHANGED} {nick_length}"
+                    message_header = f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                    print("HEADER: ", message_header)
+
+                    client_socket.send(message_header + new_nick_try.encode('utf-8'))
+
+                else:
+                    message_header = f"{message_header} {NICK_EXIST}"
+                    message_header =f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                    print("HEADER: ", message_header)
+
+                    client_socket.send(message_header)
 
 
             #envio de mensagem
             elif command == MESSAGE:
-
+                # print("Pedido: Mensagem")
                 message_size = int(message_parse[1])
+                # print("Tamanho da mensagem = ", message_size)
 
-                message = client_socket.recv(message_size)
+                message = client_socket.recv(message_size).decode('utf-8')
 
-                if not len(message):
-                    print("Problema na comunicação")
-                    break
+                # print(message)
 
                 client_nick_size = clients_dict[client_socket]['header']
-                client_nick = clients_dict[client_socket]['header']
+                client_nick = clients_dict[client_socket]['nick']
 
                 parcial_header = f"{MESSAGE} {client_nick_size} {message_size}"
 
+                # print("Header Parcial = ", parcial_header)
+
                 message_header = f"{parcial_header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                # print("Header Final = ", message_header)
 
                 message_to_send = message_header + client_nick.encode('utf-8') + message.encode('utf-8')
 
@@ -115,15 +141,11 @@ def handle_client(client_socket):
 
 
             elif command == FILE:
-
+                print("Pedido: Arquivo")
                 #Recebimento do arquivo
                 file_name_size = int(message_parse[1])
                 
                 file_name = client_socket.recv(file_name_size).decode('utf-8')
-
-                if not len(file_name):
-                    print("PROBLEMA COM A COMUNICAÇÃO")
-                    break
 
                 server_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
 
@@ -132,10 +154,6 @@ def handle_client(client_socket):
 
                 file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
 
-                if not file_size:
-                    print("PROBLEMA COM A COMUNICAÇÃO")
-                    break
-
                 server_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
 
                 #envia um ack confirmando reccebimento do tamanho do arquivo
@@ -143,10 +161,6 @@ def handle_client(client_socket):
 
                 #Recebe os dados do arquivo
                 file_data = client_socket.recv(file_size)
-
-                if not len(file_data):
-                    print("Problema na conexão")
-                    break
 
                 #prepara para fazer o broadcast do arquivo
 
@@ -197,16 +211,18 @@ def handle_client(client_socket):
                 print("Finalizando conexão com usuário")
                 break
 
-        except:
-            #ocorreu alguma desconexão
-            break 
+        except IndexError as e:
+            print("Erro de comunicação - Conexão precisa ser fechada")
+            print("Error: {}".format(str(e)))
+            break
 
-    sockets_mutex.acquire()
-    try:
-        del clients_dict[client_socket]
-        sockets_list.remove(client_socket)
-    finally:
-        sockets_mutex.release()
+        except Exception as e:
+            print("Error: {}".format(str(e)))
+            continue
+
+  
+    del clients_dict[client_socket]
+    sockets_list.remove(client_socket)
 
     client_socket.close()
 
@@ -223,37 +239,26 @@ def main():
             print("[*] Tentativa de conexão de: %s:%d" % (addr[0],addr[1]))
 
             rcv_message_header = client_socket.recv(HEADER_LENGTH)
-
-            if not len(rcv_message_header):
-                #continua no loop aguardando conexões
-                print("RCV_MSG_HEADER VAZIO")
-                client_socket.close()
-                continue
-
             
             nick_length = int(rcv_message_header.decode('utf-8').strip())
             user_nick = client_socket.recv(nick_length).decode('utf-8')
 
-            sockets_mutex.acquire()
-            try:
-                if len(sockets_list):
-                    nick_existent = False
+            if len(sockets_list):
+                nick_existent = False
 
-                    for client in clients_dict:
-                        if clients_dict[client]['nick'] == user_nick:
-                            nick_existent = True
-                            break
+                for client in clients_dict:
+                    if clients_dict[client]['nick'] == user_nick:
+                        nick_existent = True
+                        break
 
-                    if nick_existent:
-                        snd_message_header = f"{NICK_EXIST:<{HEADER_LENGTH}}".encode('utf-8')
+                if nick_existent:
+                    snd_message_header = f"{NICK_EXIST:<{HEADER_LENGTH}}".encode('utf-8')
 
-                        client_socket.send(snd_message_header)
+                    client_socket.send(snd_message_header)
 
-                        client_socket.close()
+                    client_socket.close()
 
-                        continue
-            finally:
-                sockets_mutex.release()
+                    continue
 
             clients_dict[client_socket] = {'header': nick_length, 'nick': user_nick}
             sockets_list.append(client_socket)

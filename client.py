@@ -1,3 +1,5 @@
+# -*- conding: utf-8 -*-
+
 import socket
 import subprocess
 import sys, os
@@ -32,7 +34,7 @@ LISTA DE COMANDOS\n
 Comando   [param]            Descrião\n\n
 /list                           Lista todos os usuários conectados\n
 /help                           Lista os comandos disponíveis\n
-/clean                          Limpa a janela do usuário\n
+/clear                          Limpa a janela do usuário\n
 /quit                           Desconecta do servidor\n
 /nick      novo_nick            Trocar apelido\n
 /sendFile  nome_do_arquivo.ext  Enviar arquivo\n\n
@@ -40,7 +42,239 @@ Comando   [param]            Descrião\n\n
 
 my_username = ""
 
+def senderThread(client_socket):
+    global my_username
+
+    while True:
+
+        try:
+
+            user_input = input(f'{my_username} >> ')
+
+            #se tiver alguma coisa no input
+            if len(user_input):
+
+                #checa se é um comando
+                if user_input[0] == "/":
+                    command_list = user_input[1:].split()
+
+                    command = command_list[0]
+
+                    if command == LIST_USERS:
+                        message_header = f"{LIST_USERS:<{HEADER_LENGTH}}".encode('utf-8')
+
+                        client_socket.send(message_header)
+
+
+                    elif command == NEW_NICK:
+                        nick = command_list[1]
+
+                        header = f"{NEW_NICK} {len(nick)}"
+
+                        message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                        final_message = message_header + nick.encode('utf-8')
+
+                        client_socket.send(final_message)
+
+                    
+                    elif command == FILE_CMD:
+
+                        filePath = command_list[1]
+
+                        fileName = filePath.split("/")[-1]
+
+                        header = f"{FILE_HEADER} {len(fileName)}"
+
+                        message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
+
+                        message = fileName.encode('utf-8')
+
+                        final_message = message_header + message
+                        
+                        #envia o header com o tamanho do arquivo seguido do nome do arquivo
+                        client_socket.send(message_header)
+
+                        response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
+
+                        #Se recebeu ACK
+                        #Prepara para enviar o tamanho do arquivo
+                        if response == RECEIVED:
+
+                            myFile = open(filePath, 'rb')
+                            fileBytes = myFile.read()
+                            fileSize = len(fileBytes)
+
+                            message_header = f"{fileSize:<{HEADER_LENGTH}}".encode('utf-8')
+
+                            #Envia o tamanho do arquivo
+                            client_socket.send(message_header)
+
+                            #Aguarda ACK confirmando recebimento do tamanho do arquivo
+                            response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
+
+                            #Se recebeu ACK o servidor está pronto para receber o arquivo
+                            if response == RECEIVED:
+
+                                client_socket.send(fileBytes)
+
+                            else:
+                                print("DEU RUIM ENVIO DE DADOS")
+
+                        else:
+                            print("DEU PROBLEMA AO ENVIAR O TAMANHO DO ARQUIVO")
+
+
+                    elif command == QUIT:
+                        message_header = f"{QUIT:<{HEADER_LENGTH}}".encode('utf-8')
+                        client_socket.send(message_header)
+                        print("ADEUS!")
+                        sys.exit()
+
+                    elif command == HELP:
+                        print(LIST_OF_COMMANDS)
+
+                    elif command == CLEAR:
+                        subprocess.call("reset")
+
+                    else:
+                        print("Comando inválido")
+
+                #se não é um comando é uma mensagem
+                else:
+                    
+                    header = f"{MESSAGE} {len(user_input)}"
+                    message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
+                    message = user_input.encode('utf-8')
+                    
+                    final_message = message_header + message
+                    client_socket.send(final_message)
+
+        except Exception as e:
+            print("Erro: {}".format(str(e)))
+
+
+def receiverThread(client_socket):
+    global my_username
+        
+    while True:
+    
+        #loop em mensagem recebidas
+        try:
+            #print("\n THREAD MENSAGENS RECEBIDAS \n")
+            recv_usr_header = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
+
+            parsed_header = recv_usr_header.split()
+            server_message = parsed_header[0]
+
+            print("\n FOI RECEBIDA MENSAGEM EM RECEIVER THREAD")
+            print("MENSAGEM DO SERVIDOR: ", server_message)
+            if server_message == MESSAGE:
+
+                nick_sender_size = int(parsed_header[1])
+                recv_message_size = int(parsed_header[2])
+
+                nick_sender = client_socket.recv(nick_sender_size).decode('utf-8')
+
+                sent_message = client_socket.recv(recv_message_size).decode('utf-8')
+
+                print("{} >> {}".format(nick_sender, sent_message))
+
+
+            elif server_message == LIST_USERS:
+                #print("\nRECEBIDO LISTAGEM\n")
+                sizeof_list = int(parsed_header[1])
+
+                if sizeof_list == 0:
+                    print("Você está sozinho aqui!")
+
+                else:
+                    list_data = client_socket.recv(sizeof_list).decode('utf-8')
+
+                    print(list_data)
+
+            elif server_message == NEW_NICK:
+
+                server_response = parsed_header[1]
+                
+                if server_response == NICK_EXIST:
+                    print("Nick já em uso")
+
+                elif server_response == NICK_CHANGED:
+                    nick_len = int(parsed_header[2])
+                    print("TAMANHO NOVO NICK ", nick_len)
+                    nick = client_socket.recv(nick_len).decode('utf-8')
+
+                    my_username = nick
+                    print("Nick trocado com sucesso")
+
+                else:
+                    print("Erro de conexão")
+                    print("Fechando Cliente")
+                    sys.exit()
+
+            elif server_message == FILE_HEADER:
+
+                nick_sender_size = int(parsed_header[1])
+
+                nick_sender = client_socket.recv(nick_sender_size).decode('utf-8')
+
+                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+
+                #Envia ack confirmando recebimento do nick de quem enviou o arquivo
+                client_socket.send(client_response)
+
+                #recebimento do tamanho do nome arquivo
+                file_name_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
+
+                file_name = client_socket.recv(file_name_size).decode('utf-8')
+
+                complete_file_path = FILES_PATH + file_name
+
+                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+
+                #Envia ack confirmando recebimento do nome arquivo
+                client_socket.send(client_response)
+
+                file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
+
+                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+
+                #Envia ack confirmando recebimento do tamanho do arquivo
+                client_socket.send(client_response)
+
+                file_data = client_socket.recv(file_size)
+
+                myFile = open(complete_file_path, 'wb')
+
+                myFile.write(file_data)
+                myFile.close
+
+                print("{} enviou o arquivo {}".format(nick_sender, complete_file_path))
+
+        except IOError as e:
+
+            if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
+                print("Erro de leitura 1: {}".format(str(e)))
+                sys.exit()
+
+            continue
+
+        except IndexError as e:
+            print("Erro de conexão: {}".format(str(e)))
+            print("\n Saindo do Programa\n")
+            sys.exit()
+
+
+        except Exception as e:
+
+            print("Erro de leitura 2: {}".format(str(e)))
+            sys.exit()
+
+
 def main():
+    global my_username
+
     subprocess.call("reset")
 
     print("Criando diretório para receber arquivos\n")
@@ -95,223 +329,12 @@ def main():
         else:
             print("Nick inválido")
 
+    sender_handler = threading.Thread(target=senderThread, args=(client_socket,))
+    receiver_handler = threading.Thread(target=receiverThread, args=(client_socket,))
 
-    while True:
+    sender_handler.start()
+    receiver_handler.start()
 
-        user_input = input(f'{my_username} >> ')
-
-        #se tiver alguma coisa no input
-        if len(user_input):
-
-            #checa se é um comando
-            if user_input[0] == "/":
-                command_list = user_input[1:].split()
-
-                command = command_list[0]
-
-                if command == LIST_USERS:
-                    message_header = f"{LIST_USERS:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    client_socket.send(message_header)
-
-                elif command == NEW_NICK:
-                    nick = command_list[1]
-
-                    header = f"{NEW_NICK} {len(nick)}"
-
-                    message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    final_message = message_header + nick.encode('utf-8')
-
-                    client_socket.send(final_message)
-
-                    server_response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                    if server_response == NICK_EXIST:
-                        print("Nick já em uso")
-
-                    elif server_response == NICK_CHANGED:
-                        my_username = nick
-                        print("Nick trocado com sucesso")
-
-                    else:
-                        print("Erro de conexão")
-                        print("Fechando Cliente")
-                        sys.exit()
-                
-                elif command == FILE_CMD:
-
-                    filePath = command_list[1]
-
-                    fileName = filePath.split("/")[-1]
-
-                    header = f"{FILE_HEADER} {len(fileName)}"
-
-                    message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    message = fileName.encode('utf-8')
-
-                    final_message = message_header + message
-                    
-                    #envia o header com o tamanho do arquivo seguido do nome do arquivo
-                    client_socket.send(message_header)
-
-                    response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                    #Se recebeu ACK
-                    #Prepara para enviar o tamanho do arquivo
-                    if response == RECEIVED:
-
-                        myFile = open(filePath, 'rb')
-                        fileBytes = myFile.read()
-                        fileSize = len(fileBytes)
-
-                        message_header = f"{fileSize:<{HEADER_LENGTH}}".encode('utf-8')
-
-                        #Envia o tamanho do arquivo
-                        client_socket.send(message_header)
-
-                        #Aguarda ACK confirmando recebimento do tamanho do arquivo
-                        response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                        #Se recebeu ACK o servidor está pronto para receber o arquivo
-                        if response == RECEIVED:
-
-                            client_socket.send(fileBytes)
-
-                        else:
-                            print("DEU RUIM ENVIO DE DADOS")
-
-                    else:
-                        print("DEU PROBLEMA AO ENVIAR O TAMANHO DO ARQUIVO")
-
-
-                elif command == QUIT:
-                    message_header = f"{QUIT:<{HEADER_LENGTH}}".encode('utf-8')
-                    client_socket.send(message_header)
-
-                elif command == HELP:
-                    print(LIST_OF_COMMANDS)
-
-                elif command == CLEAR:
-                    subprocess.call("reset")
-
-                else:
-                    print("Comando inválido")
-
-            #se não é um comando é uma mensagem
-            else:
-                
-                header = f"{MESSAGE} {len(user_input)}"
-                message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
-                message = user_input.encode('utf-8')
-                
-                final_message = message_header + message
-                client_socket.send(final_message)
-
-        while True:
-        
-            #loop em mensagem recebidas
-            try:
-
-                recv_usr_header = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                if not len(recv_usr_header):
-                    break
-
-                parsed_header = recv_usr_header.split()
-                server_message = parsed_header[0]
-
-                if server_message == MESSAGE:
-
-                    nick_sender_size = int(parsed_header[1])
-                    recv_message_size = int(parsed_header[2])
-
-                    nick_sender = client_socket.recv(nick_sender_size).decode('utf-8')
-
-                    if not len(nick_sender):
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    sent_message = client_socket.recv(recv_message_size).decode('utf-8')
-
-                    if not len(sent_message):
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    print("{} >>> {}".format(nick_sender, sent_message))
-
-                elif server_message == FILE_HEADER:
-
-                    nick_sender_size = int(parsed_header[1])
-
-                    nick_sender = client_socket.recv(nick_sender_size).decode('utf-8')
-
-                    if not len(nick_sender):
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    #Envia ack confirmando recebimento do nick de quem enviou o arquivo
-                    client_socket.send(client_response)
-
-                    #recebimento do tamanho do nome arquivo
-                    file_name_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
-
-                    if not file_name_size:
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    file_name = client_socket.recv(file_name_size).decode('utf-8')
-
-                    if not len(file_name):
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    complete_file_path = FILES_PATH + file_name
-
-                    client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    #Envia ack confirmando recebimento do nome arquivo
-                    client_socket.send(client_response)
-
-                    file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
-
-                    if not file_size:
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                    #Envia ack confirmando recebimento do tamanho do arquivo
-                    client_socket.send(client_response)
-
-                    file_data = client_socket.recv(file_size)
-
-                    if not file_data:
-                        print("Servidor fechou a conexão")
-                        sys.exit()
-
-                    myFile = open(complete_file_path, 'wb')
-
-                    myFile.write(file_data)
-                    myFile.close
-
-                    print("{} enviou o arquivo {}".format(nick_sender, complete_file_path))
-
-            except IOError as e:
-
-                if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-                    print("Erro de leitura 1: {}".format(str(e)))
-                    sys.exit()
-
-                continue
-                
-            except Exception as e:
-
-                print("Erro de leitura 2: {}".format(str(e)))
-                sys.exit()
 
 
 main()
