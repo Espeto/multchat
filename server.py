@@ -46,7 +46,7 @@ def handle_client(client_socket):
 
             message_header_rcv = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
 
-            print("Mensagem recebida = ", message_header_rcv)
+            print("\nSOLICITAÇÃO DE USUÁRIO\n")
 
             message_parse = message_header_rcv.split()
             command = message_parse[0]
@@ -141,71 +141,34 @@ def handle_client(client_socket):
 
 
             elif command == FILE:
-                print("Pedido: Arquivo")
+                # print("Pedido: Arquivo")
                 #Recebimento do arquivo
                 file_name_size = int(message_parse[1])
                 
-                file_name = client_socket.recv(file_name_size).decode('utf-8')
+                file_name = client_socket.recv(file_name_size)
 
-                server_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+                file_data_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
 
-                #envia um ack confirmando reccebimento do nome arquivo
-                client_socket.send(server_response)
-
-                file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
-
-                server_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                #envia um ack confirmando reccebimento do tamanho do arquivo
-                client_socket.send(server_response)
-
-                #Recebe os dados do arquivo
-                file_data = client_socket.recv(file_size)
+                file_bytes = client_socket.recv(file_data_size)
 
                 #prepara para fazer o broadcast do arquivo
 
                 message_header = f"{FILE} {clients_dict[client_socket]['header']}"
-                message_header = f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
+                message_header_1 = f"{message_header:<{HEADER_LENGTH}}".encode('utf-8')
+                message_header_1 = message_header_1 + clients_dict[client_socket]['nick'].encode('utf-8')
+                
+                message_header_2 = f"{file_name_size:<{HEADER_LENGTH}}".encode('utf-8')
+                message_header_2 = message_header_2 + file_name
+
+                message_header_3 = f"{file_data_size:<{HEADER_LENGTH}}".encode('utf-8')
+                message_header_3 = message_header_3 + file_bytes
+
 
                 for socket in sockets_list:
                     if socket != client_socket:
-                        socket.send(message_header + clients_dict[client_socket]['nick'].encode('utf-8'))
+                        socket.send(message_header_1 + message_header_2 + message_header_3)
 
-                        socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                        #Cliente recebeu mensagem com nick do emissor
-                        if socket_response == RECEIVED:
-
-                            server_response = f"{file_name_size:<{HEADER_LENGTH}}".encode('utf-8')
-
-                            #Enviando o header com tamanho do nome do arquivo mais o nome
-                            socket.send(server_response + file_name.encode('utf-8'))
-
-                            socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                            #Aguarda o ack confirmando o recebimento
-                            if socket_response == RECEIVED:
-
-                                server_response = f"{file_size:<{HEADER_LENGTH}}".encode('utf-8')
-
-                                #Envia o header com o tamanho do arquivo
-                                socket.send(server_response)
-                                
-                                #Aguarda o Ack de recebimento
-                                socket_response = socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                                if socket_response == RECEIVED:
-                                    #Envia os dados do arquivo
-                                    socket.send(file_data)
-
-                                else:
-                                    print("PROBLEMA NA COMUNICAÇÃO")
-                                    break
-
-                        else:
-                            print("PROBLEMA NA COMUNICAÇÃO")
-                            break
-                            
+                                         
             elif command == QUIT:
                 #finalizando recursos de usuário
                 print("Finalizando conexão com usuário")

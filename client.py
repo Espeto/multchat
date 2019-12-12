@@ -19,14 +19,14 @@ NICK_EXIST   = "NE"
 NICK_CHANGED = "NC"
 RECEIVED     = "ACK"
 
-LIST_USERS = "list"
-NEW_NICK   = "nick"
-MESSAGE    = "msg"
-FILE_CMD   = "sendFile"
+LIST_USERS     = "list"
+NEW_NICK       = "nick"
+MESSAGE        = "msg"
+FILE_CMD       = "sendFile"
 FILE_HEADER    = "file"
-QUIT       = "quit"
-HELP       = "help"
-CLEAR      = "clear"
+QUIT           = "quit"
+HELP           = "help"
+CLEAR          = "clear"
 
 LIST_OF_COMMANDS = '''
 LISTA DE COMANDOS\n
@@ -82,47 +82,34 @@ def senderThread(client_socket):
 
                         filePath = command_list[1]
 
+                        print("FILE PATH = ", filePath)
+
                         fileName = filePath.split("/")[-1]
+
+                        print("FILE NAME = ", fileName)
 
                         header = f"{FILE_HEADER} {len(fileName)}"
 
-                        message_header = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
+                        print("FILE HEADER = ", header)
 
-                        message = fileName.encode('utf-8')
+                        message_header_1 = f"{header:<{HEADER_LENGTH}}".encode('utf-8')
 
-                        final_message = message_header + message
+                        file_name_header = fileName.encode('utf-8')
+
+                        myFile = open(filePath, 'rb')
+                        fileBytes = myFile.read()
+                        fileSize = len(fileBytes)
+
+                        print("FILE SIZE = ", fileSize)
+
+                        message_header_2 = f"{fileSize:<{HEADER_LENGTH}}".encode('utf-8')
+
+                        final_message = message_header_1 + file_name_header + message_header_2 + fileBytes
                         
                         #envia o header com o tamanho do arquivo seguido do nome do arquivo
-                        client_socket.send(message_header)
+                        client_socket.send(final_message)
 
-                        response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                        #Se recebeu ACK
-                        #Prepara para enviar o tamanho do arquivo
-                        if response == RECEIVED:
-
-                            myFile = open(filePath, 'rb')
-                            fileBytes = myFile.read()
-                            fileSize = len(fileBytes)
-
-                            message_header = f"{fileSize:<{HEADER_LENGTH}}".encode('utf-8')
-
-                            #Envia o tamanho do arquivo
-                            client_socket.send(message_header)
-
-                            #Aguarda ACK confirmando recebimento do tamanho do arquivo
-                            response = client_socket.recv(HEADER_LENGTH).decode('utf-8').strip()
-
-                            #Se recebeu ACK o servidor está pronto para receber o arquivo
-                            if response == RECEIVED:
-
-                                client_socket.send(fileBytes)
-
-                            else:
-                                print("DEU RUIM ENVIO DE DADOS")
-
-                        else:
-                            print("DEU PROBLEMA AO ENVIAR O TAMANHO DO ARQUIVO")
+                        myFile.close()
 
 
                     elif command == QUIT:
@@ -167,8 +154,8 @@ def receiverThread(client_socket):
             parsed_header = recv_usr_header.split()
             server_message = parsed_header[0]
 
-            print("\n FOI RECEBIDA MENSAGEM EM RECEIVER THREAD")
-            print("MENSAGEM DO SERVIDOR: ", server_message)
+            # print("\n FOI RECEBIDA MENSAGEM EM RECEIVER THREAD")
+            # print("MENSAGEM DO SERVIDOR: ", server_message)
             if server_message == MESSAGE:
 
                 nick_sender_size = int(parsed_header[1])
@@ -215,42 +202,40 @@ def receiverThread(client_socket):
 
             elif server_message == FILE_HEADER:
 
+                print("=+=+=+=+=+=+= Recebendo Arquivo =+=+=+=+=+=+=")
+
                 nick_sender_size = int(parsed_header[1])
+
+                print("TAM NICK SENDER = ", nick_sender_size)
 
                 nick_sender = client_socket.recv(nick_sender_size).decode('utf-8')
 
-                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
+                print("NICK SENDER = ", nick_sender)
 
-                #Envia ack confirmando recebimento do nick de quem enviou o arquivo
-                client_socket.send(client_response)
+                recv_file_name_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
 
-                #recebimento do tamanho do nome arquivo
-                file_name_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
+                print("FILE NAME SIZE = ", recv_file_name_size)
 
-                file_name = client_socket.recv(file_name_size).decode('utf-8')
+                file_name = client_socket.recv(recv_file_name_size).decode('utf-8')
 
-                complete_file_path = FILES_PATH + file_name
-
-                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                #Envia ack confirmando recebimento do nome arquivo
-                client_socket.send(client_response)
+                print("FILE NAME = ", file_name)
 
                 file_size = int(client_socket.recv(HEADER_LENGTH).decode('utf-8').strip())
 
-                client_response = f"{RECEIVED:<{HEADER_LENGTH}}".encode('utf-8')
-
-                #Envia ack confirmando recebimento do tamanho do arquivo
-                client_socket.send(client_response)
+                print("FILE SIZE = ", file_size)
 
                 file_data = client_socket.recv(file_size)
+                
+                complete_file_path = FILES_PATH + file_name
+
 
                 myFile = open(complete_file_path, 'wb')
 
                 myFile.write(file_data)
-                myFile.close
 
                 print("{} enviou o arquivo {}".format(nick_sender, complete_file_path))
+
+                myFile.close()
 
         except IOError as e:
 
