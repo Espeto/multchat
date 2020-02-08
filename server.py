@@ -7,7 +7,7 @@ import os, sys
 
 HEADER_LENGTH = 10
 bind_port = 1234
-bind_ip =  "127.0.0.1"
+bind_ip =  "192.168.165.8"
 
 CONN_ACCEP   = "ACC"
 NICK_EXIST   = "NE"

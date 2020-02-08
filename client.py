@@ -12,7 +12,7 @@ FILES_PATH =  str(Path.home())+"/chatRoom/"
 
 HEADER_LENGTH = 10
 bind_port = 1234
-bind_ip = "127.0.0.1"
+bind_ip = "192.168.165.8"
 
 CONN_ACCEP   = "ACC"
 NICK_EXIST   = "NE"
@@ -306,7 +306,7 @@ def main():
             except Exception as e:
                 print("Mensagem de erro: {}".format(str(e)))
                 print("\n")
-                exc_type, exc_obj, exc_tb = sys.exc_info()
+                exc_type, exc_tb = sys.exc_info()
                 fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
                 print(exc_type, fname, exc_tb.tb_lineno)
                 client_socket.close()
